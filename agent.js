@@ -1,5 +1,5 @@
 // ============================================================
-//  PROJECT OBSESSION — Personal Agentic AI v3.1
+//  PROJECT OBSESSION — Personal Agentic AI v3.2
 //  🤖 Intent-based Agent — No tool_use API needed
 //  Tools: Web Search | Email Drafter | Scheduler | Progress Tracker
 //  AI: Groq + Llama 3.3 70B (FREE)
@@ -13,6 +13,8 @@ const progressTracker = require("./tools/progressTracker");
 const webSearch = require("./tools/webSearch");
 const emailDrafter = require("./tools/emailDrafter");
 const selfImprove = require("./tools/selfImprove");
+const preferenceMemory = require("./tools/preferenceMemory");
+const knowledgeBase = require("./tools/knowledgeBase");
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -61,6 +63,17 @@ function detectIntent(text) {
 async function executeTools(text, intents, chatId) {
   const results = [];
   const badges = [];
+
+  // Knowledge base lookup
+  if (knowledgeBase.needsKnowledgeLookup(text)) {
+    try {
+      const kr = await knowledgeBase.search(text);
+      if (kr.found) {
+        results.push(`📖 KNOWLEDGE [${kr.source}] — ${kr.title}:\n${kr.summary}`);
+        badges.push(`📖 ${kr.source}`);
+      }
+    } catch (e) {}
+  }
 
   for (const intent of intents) {
     try {
@@ -125,6 +138,7 @@ async function callGroq(messages) {
 async function runAgent(chatId, userQuery) {
   const state = getState(chatId);
   const intents = detectIntent(userQuery);
+  const profileCtx = preferenceMemory.getProfileContext(chatId);
   const { toolContext, badges } = await executeTools(userQuery, intents, chatId);
 
   const userMessage = toolContext
@@ -132,7 +146,7 @@ async function runAgent(chatId, userQuery) {
     : userQuery;
 
   const messages = [
-    { role: "system", content: SYSTEMS[state.phase] },
+    { role: "system", content: SYSTEMS[state.phase] + (profileCtx ? "\n\n" + profileCtx : "") },
     ...state.history.slice(-20),
     { role: "user", content: userMessage },
   ];
@@ -141,6 +155,9 @@ async function runAgent(chatId, userQuery) {
 
   state.history.push({ role: "user", content: userQuery });
   state.history.push({ role: "assistant", content: reply });
+
+  // Learn from this interaction
+  preferenceMemory.learnFromMessage(chatId, userQuery, reply);
   if (state.history.length > 30) state.history = state.history.slice(-20);
 
   return { reply, badges };
@@ -197,7 +214,7 @@ bot.onText(/\/start/, (msg) => {
   const name = msg.from?.first_name || "Agent";
   getState(chatId);
   bot.sendMessage(chatId,
-    `◆ *PROJECT OBSESSION v3.1 — AGENT ONLINE*\n\nWelcome, *${name}*.\n\n*This is your AI Agent — not a chatbot.*\n\n🤖 *Tools Online:*\n🔍 Web Search — live internships & CDS news\n📧 Email Drafter — applications & networking\n📅 Scheduler — reminders & study sessions\n📊 Progress Tracker — your daily wins\n\n*PHASE-01 — DATA ANALYST* 🎯\n*PHASE-02 — CDS OFFICER* 🎖️\n\nJust talk naturally. I detect what tools to use automatically.\nUse /help for all commands.`,
+    `◆ *PROJECT OBSESSION v3.1 — AGENT ONLINE*\n\nWelcome, *${name}*.\n\n*This is your AI Agent — not a chatbot.*\n\n🤖 *Tools Online:*\n🔍 Web Search — live internships & CDS news\n📧 Email Drafter — applications & networking\n📅 Scheduler — reminders & study sessions\n📊 Progress Tracker — your daily wins\n\n*PHASE-01 — DATA ANALYST* 🎯\n*PHASE-02 — CDS OFFICER* 🎖️\n\nJust talk naturally. I detect what tools to use automatically.\nUse /help for all commands.\n\n🧠 *New:* /profile — see what I know about you\n📖 *New:* Wikipedia + Knowledge Base integrated`,
     { parse_mode: "Markdown",
       reply_markup: { keyboard: [["📊 My Progress","📅 My Reminders"],["/phase1","/phase2","/sector"],["/status","/reset","/help"]], resize_keyboard: true }
     });
@@ -205,7 +222,7 @@ bot.onText(/\/start/, (msg) => {
 
 bot.onText(/\/help/, (msg) => {
   bot.sendMessage(msg.chat.id,
-    `◆ *OBSESSION AGENT — COMMANDS*\n\n/phase1 — Data Analyst mode\n/phase2 — CDS Officer mode\n/sector — Switch sector\n/progress — Progress report\n/reminders — Active reminders\n/status — Current mode\n/reset — Clear history\n\n*Just talk naturally:*\n_"Find DA internships at Google"_ → 🔍 searches\n_"Draft email to Flipkart HR"_ → 📧 writes email\n_"Remind me SQL at 9pm daily"_ → 📅 sets reminder\n_"I studied 3 hours today"_ → 📊 logs progress`,
+    `◆ *OBSESSION AGENT — COMMANDS*\n\n/phase1 — Data Analyst mode\n/phase2 — CDS Officer mode\n/sector — Switch sector\n/progress — Progress report\n/reminders — Active reminders\n/status — Current mode\n/reset — Clear history\n/profile — Your adaptive profile\n/tone strict|encouraging|balanced\n/improve — Self-improvement stats\n\n*Just talk naturally:*\n_"Find DA internships at Google"_ → 🔍 searches\n_"Draft email to Flipkart HR"_ → 📧 writes email\n_"Remind me SQL at 9pm daily"_ → 📅 sets reminder\n_"I studied 3 hours today"_ → 📊 logs progress`,
     { parse_mode: "Markdown" });
 });
 
@@ -280,6 +297,22 @@ bot.on("callback_query", async (q) => {
   }
 });
 
+// ── /profile — adaptive profile summary ──────────────────────
+bot.onText(/\/profile/, (msg) => {
+  safeSend(msg.chat.id, preferenceMemory.getProfileSummary(msg.chat.id));
+});
+
+// ── /tone — set response tone ─────────────────────────────────
+bot.onText(/\/tone (.+)/, (msg, match) => {
+  const t = match[1].toLowerCase().trim();
+  if (!["strict", "encouraging", "balanced"].includes(t)) {
+    return bot.sendMessage(msg.chat.id, "Valid tones: *strict* | *encouraging* | *balanced*", { parse_mode: "Markdown" });
+  }
+  preferenceMemory.setTone(msg.chat.id, t);
+  const emoji = { strict: "⚔️", encouraging: "💪", balanced: "⚖️" }[t];
+  bot.sendMessage(msg.chat.id, `${emoji} *Tone set to: ${t.toUpperCase()}*\nI'll adapt my responses accordingly.`, { parse_mode: "Markdown" });
+});
+
 // ── /improve — self-improvement stats ────────────────────────
 bot.onText(/\/improve/, (msg) => {
   safeSend(msg.chat.id, `◆ *SELF-IMPROVEMENT REPORT*\n\n${selfImprove.getStats(msg.chat.id)}`);
@@ -345,7 +378,7 @@ bot.on("message", async (msg) => {
 bot.on("polling_error", (e) => console.error("Polling:", e.message));
 process.on("unhandledRejection", (e) => console.error("Unhandled:", e));
 
-console.log("◆ PROJECT OBSESSION v3.1 — AGENT ONLINE");
+console.log("◆ PROJECT OBSESSION v3.2 — AGENT ONLINE");
 console.log(`   AI Engine: Groq + ${MODEL} (FREE)`);
 console.log("   Tools: Web Search | Email Drafter | Scheduler | Progress Tracker");
 console.log("   Press Ctrl+C to stop.\n");
