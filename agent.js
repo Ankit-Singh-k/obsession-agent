@@ -16,7 +16,7 @@ const emailDrafter = require("./tools/emailDrafter");
 // ── Init ─────────────────────────────────────────────────────
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const MODEL = "llama3-groq-70b-8192-tool-use-preview";
+const MODEL = "llama-3.1-70b-versatile";
 
 // ── Per-user state ────────────────────────────────────────────
 const userState = new Map();
