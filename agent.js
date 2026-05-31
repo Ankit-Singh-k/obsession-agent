@@ -12,6 +12,7 @@ const scheduler = require("./tools/scheduler");
 const progressTracker = require("./tools/progressTracker");
 const webSearch = require("./tools/webSearch");
 const emailDrafter = require("./tools/emailDrafter");
+const selfImprove = require("./tools/selfImprove");
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -279,6 +280,11 @@ bot.on("callback_query", async (q) => {
   }
 });
 
+// ── /improve — self-improvement stats ────────────────────────
+bot.onText(/\/improve/, (msg) => {
+  safeSend(msg.chat.id, `◆ *SELF-IMPROVEMENT REPORT*\n\n${selfImprove.getStats(msg.chat.id)}`);
+});
+
 // ── Main message handler ──────────────────────────────────────
 bot.on("message", async (msg) => {
   if (!msg.text || msg.text.startsWith("/")) return;
@@ -286,16 +292,51 @@ bot.on("message", async (msg) => {
   if (msg.text === "📅 My Reminders") return safeSend(msg.chat.id, `◆ *ACTIVE REMINDERS*\n\n${scheduler.listReminders(msg.chat.id)}`);
 
   const chatId = msg.chat.id;
-  const sec = SEC[getState(chatId).section];
+  const state = getState(chatId);
+  const sec = SEC[state.section];
   bot.sendChatAction(chatId, "typing");
 
   try {
     const { reply, badges } = await runAgent(chatId, msg.text);
+
+    // ── Self-improvement check ──────────────────────────────
+    if (selfImprove.isNegativeResponse(reply)) {
+      console.log(`[Self-Improve] Negative response detected for: "${msg.text.slice(0,50)}"`);
+
+      // Notify user we are retrying
+      bot.sendMessage(chatId, `🔄 _Detected a weak response. Improving..._`, { parse_mode: "Markdown" });
+      bot.sendChatAction(chatId, "typing");
+
+      // Generate improved response
+      const result = await selfImprove.improveResponse(
+        groq, MODEL, chatId, msg.text, reply, state.phase, state.section
+      );
+
+      if (result.improved) {
+        const badgeLine = badges.length ? `\n\n_🤖 Used: ${badges.join(" · ")}_` : "";
+        await safeSend(chatId, `${sec.e} *[${sec.l}]*\n\n${result.response}${badgeLine}\n\n_✨ Auto-improved response_`);
+        return;
+      }
+    }
+    // ── Normal response ─────────────────────────────────────
     const badgeLine = badges.length ? `\n\n_🤖 Used: ${badges.join(" · ")}_` : "";
     await safeSend(chatId, `${sec.e} *[${sec.l}]*\n\n${reply}${badgeLine}`);
+
   } catch (err) {
     console.error("Handler error:", err.message);
-    bot.sendMessage(chatId, `⚠️ Error: ${err.message}. Please try again.`);
+    // Even on hard errors, try to self-improve
+    try {
+      bot.sendMessage(chatId, `🔄 _Encountered an error. Trying a different approach..._`, { parse_mode: "Markdown" });
+      bot.sendChatAction(chatId, "typing");
+      const result = await selfImprove.improveResponse(
+        groq, MODEL, chatId, msg.text, err.message, state.phase, state.section
+      );
+      if (result.improved) {
+        await safeSend(chatId, `${sec.e} *[${sec.l}]*\n\n${result.response}\n\n_✨ Recovered from error_`);
+        return;
+      }
+    } catch {}
+    bot.sendMessage(chatId, `⚠️ Could not process this request. Please rephrase and try again.`);
   }
 
   scheduler.checkAndFire(chatId, bot);
@@ -308,3 +349,5 @@ console.log("◆ PROJECT OBSESSION v3.1 — AGENT ONLINE");
 console.log(`   AI Engine: Groq + ${MODEL} (FREE)`);
 console.log("   Tools: Web Search | Email Drafter | Scheduler | Progress Tracker");
 console.log("   Press Ctrl+C to stop.\n");
+
+// ── /improve — show self-improvement stats ────────────────────
