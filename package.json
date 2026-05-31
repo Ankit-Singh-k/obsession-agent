@@ -1,0 +1,21 @@
+{
+  "name": "obsession-agent-v3",
+  "version": "3.0.0",
+  "description": "PROJECT OBSESSION — True Agentic AI (Groq + Llama 3.3 70B + 4 Tools)",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "dev": "nodemon agent.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "groq-sdk": "^0.3.0",
+    "node-telegram-bot-api": "^0.64.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
