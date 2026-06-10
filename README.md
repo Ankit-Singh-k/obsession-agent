@@ -1,39 +1,13 @@
-# PROJECT OBSESSION v3.0 — True Agentic AI
+# PROJECT OBSESSION AGENT  v3.0 — Agentic AI
 
-> This is not a chatbot. This is an agent that **plans, decides, and acts**.
-
----
-
-## What Changed from v2 → v3
-
-| Feature | v2 (Bot) | v3 (Agent) |
-|---|---|---|
-| Web search | ❌ | ✅ Live (DuckDuckGo / SerpAPI) |
-| Email drafting | ❌ | ✅ Auto-drafts on request |
-| Reminders | ❌ | ✅ Natural language scheduling |
-| Progress tracking | ❌ | ✅ Logs & reports everything |
-| Tool use | ❌ | ✅ Groq function calling |
-| Memory leak fix | ❌ | ✅ Auto-cleanup after 7 days |
-| Phase 2 bug fix | ❌ | ✅ startDate resets correctly |
+> This is an agent that **plans, decides, and acts**.
 
 ---
 
-## Cost Breakdown
-
-| Component | Cost |
-|---|---|
-| Telegram Bot API | FREE |
-| Groq API (Llama 3.3 70B + function calling) | FREE |
-| DuckDuckGo Search | FREE (unlimited) |
-| SerpAPI (optional, better search) | FREE (100/month) |
-| Railway / Render hosting | FREE |
-| **TOTAL** | **₹0 / $0** |
-
----
 
 ## Setup (5 minutes)
 
-### Step 1 — Clone / copy files
+### Step 1 — Clone/copy files
 
 ```bash
 # Copy all files to a folder
@@ -72,15 +46,7 @@ npm start
 3. Add environment variables in Railway dashboard
 4. Railway detects `Procfile` and runs `node agent.js` automatically
 5. Done — agent runs forever, free
-
-### Render.com
-
-1. New → **Background Worker** (NOT Web Service)
-2. Connect GitHub repo
-3. Build command: `npm install`
-4. Start command: `node agent.js`
-5. Add env vars → Deploy
-
+   
 ---
 
 ## How the Agent Works
@@ -145,7 +111,3 @@ obsession-agent/
 ├── .env.example
 └── .gitignore
 ```
-
----
-
-*PROJECT OBSESSION v3.0 — Built to WIN. At zero cost.*
